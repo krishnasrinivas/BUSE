@@ -16,21 +16,30 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "buse.h"
 
-static void *data;
+// static void *data;
 static int xmpl_debug = 1;
+int fdread;
+int fdwrite;
 
 static int xmp_read(void *buf, u_int32_t len, u_int64_t offset, void *userdata)
 {
   if (*(int *)userdata)
     fprintf(stderr, "R - %lu, %u\n", offset, len);
-  memcpy(buf, (char *)data + offset, len);
+  // memcpy(buf, (char *)data + offset, len);
+  pread(fdread, buf, len, offset);
   return 0;
 }
 
@@ -38,7 +47,9 @@ static int xmp_write(const void *buf, u_int32_t len, u_int64_t offset, void *use
 {
   if (*(int *)userdata)
     fprintf(stderr, "W - %lu, %u\n", offset, len);
-  memcpy((char *)data + offset, buf, len);
+  // memcpy((char *)data + offset, buf, len);
+  pwrite(fdwrite, buf, len, offset);
+  //fdatasync(fdwrite);
   return 0;
 }
 
@@ -69,13 +80,22 @@ static struct buse_operations aop = {
   .disc = xmp_disc,
   .flush = xmp_flush,
   .trim = xmp_trim,
-  .size = 128 * 1024 * 1024,
+  .size = 1024 * 1024 * 1024,
 };
 
 int main(int argc, char *argv[])
 {
   (void)(argc);
-  data = malloc(aop.size);
-
+ // data = malloc(aop.size);
+  fdread = open(argv[2], O_RDONLY);
+  fdwrite = open(argv[2], O_RDWR|O_DIRECT);
+  if (fdread == -1) {
+    fprintf(stderr, "%s\n", "unable to open file!");
+    exit(1);
+  }
   return buse_main(argv[1], &aop, (void *)&xmpl_debug);
+  if (fdwrite == -1) {
+    fprintf(stderr, "%s\n", "unable to open file!");
+    exit(1);
+  }
 }
